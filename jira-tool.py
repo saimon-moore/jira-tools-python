@@ -80,11 +80,11 @@ def load_tickets_from_csv(csv_path: str) -> List[JiraTicket]:
         reader = csv.DictReader(csvfile)
         for row in reader:
             tickets.append(JiraTicket(
-                issue_type=row['issueType'],
-                title=row['title'],
-                investment_profile=row['investmentProfile'],
-                due_date=row.get('duedate'),
-                labels=row.get('labels', '').split(',')
+                issue_type=row['issueType'].strip(),
+                title=row['title'].strip(),
+                investment_profile=row['investmentProfile'].strip(),
+                due_date=row.get('duedate').strip(),
+                labels=row.get('labels', '').strip().split(',')
             ))
     return tickets
 
@@ -183,11 +183,14 @@ def generate_description(issue_type: str, title: str) -> str:
 
 # Create Jira ticket
 def create_jira_ticket(jira: JIRA, project_config: Dict, ticket: JiraTicket) -> Issue:
+    logging.info(f"Creating ticket: {ticket}")
     issue_type_id = project_config['issueTypes'].get(ticket.issue_type)
+    logging.info(f"Issue type ID: {issue_type_id}")
     investment_profile_id = next(
         (profile['id'] for profile in project_config['investmentProfiles'] if profile['value'] == ticket.investment_profile),
         None
     )
+    logging.info(f"Investment profile ID: {investment_profile_id} for {ticket.investment_profile}")
     if not issue_type_id or not investment_profile_id:
         logging.error(f"Invalid issue type or investment profile for ticket: {ticket.title}")
         return None
@@ -257,9 +260,9 @@ def main():
     jira_email, jira_api_token = get_jira_credentials()
     jira = connect_to_jira(jira_email, jira_api_token)
 
-    csv_path = input("Enter the path to the CSV file: ")
+    project_name = input("Enter the project: ")
+    csv_path = f"./projects/{project_name}.csv"
     logging.info(f"Reading CSV file: {csv_path}")
-    project_name = os.path.splitext(os.path.basename(csv_path))[0]
     logging.info(f"Creating tickets for project: {project_name}")
     project_config = load_project_config(project_name)
     logging.info(f"Loaded project config: {project_config}")
