@@ -40,6 +40,7 @@ class JiraTicket:
     investment_profile: str
     due_date: Optional[str] = None
     labels: Optional[List[str]] = None
+    parent: Optional[str] = None
 
 def get_jira_credentials() -> Tuple[Optional[str], Optional[str]]:
     """Get Jira credentials from the user or 1Password."""
@@ -85,7 +86,8 @@ def load_tickets_from_csv(csv_path: str) -> List[JiraTicket]:
                 title=row['title'].strip(),
                 investment_profile=row['investmentProfile'].strip(),
                 due_date=row.get('duedate').strip(),
-                labels=row.get('labels', '').strip().split(',')
+                labels=row.get('labels', '').strip().split(','),
+                parent=row.get('parent').strip()
             ))
     return tickets
 
@@ -207,20 +209,16 @@ def generate_description(issue_type: str, title: str) -> str:
 
 # Create Jira ticket
 def create_jira_ticket(jira: JIRA, project_config: Dict, ticket: JiraTicket) -> Issue:
-    logging.info(f"Creating ticket: {ticket}")
     issue_type_id = project_config['issueTypes'].get(ticket.issue_type)
-    logging.info(f"Issue type ID: {issue_type_id}")
     investment_profile_id = next(
         (profile['id'] for profile in project_config['investmentProfiles'] if profile['value'] == ticket.investment_profile),
         None
     )
-    logging.info(f"Investment profile ID: {investment_profile_id} for {ticket.investment_profile}")
     if not issue_type_id or not investment_profile_id:
         logging.error(f"Invalid issue type or investment profile for ticket: {ticket.title}")
         return None
 
     description = generate_description(ticket.issue_type, ticket.title)
-    logging.info(f"Generated description for ticket: {ticket.title}: '{description}'")
 
     fields = {
         "project": {"id": project_config["projectId"]},
@@ -240,8 +238,10 @@ def create_jira_ticket(jira: JIRA, project_config: Dict, ticket: JiraTicket) -> 
     if ticket.labels:
         fields["labels"] = ticket.labels
 
+    if ticket.parent:
+        fields["parent"] = {"key": ticket.parent}
+
     try:
-        logging.info(f"Creating ticket: {ticket.title} with fields: {fields}")
         return jira.create_issue(fields=fields)
     except Exception as e:
         logging.error(f"Error creating ticket {ticket.title}: {e}")
@@ -298,15 +298,11 @@ def main():
     check_for_running_ollama()
 
     jira_api_token, jira_email = get_jira_credentials()
-    logging.info(f"Connecting to Jira with email: {jira_email} and API token: {jira_api_token}")
     jira = connect_to_jira(jira_email, jira_api_token)
 
     project_name = input("Enter the project: ")
     csv_path = f"./projects/{project_name}.csv"
-    logging.info(f"Reading CSV file: {csv_path}")
-    logging.info(f"Creating tickets for project: {project_name}")
     project_config = load_project_config(project_name)
-    logging.info(f"Loaded project config: {project_config}")
 
     tickets = load_tickets_from_csv(csv_path)
     logging.info(f"Loaded {len(tickets)} tickets from CSV")
