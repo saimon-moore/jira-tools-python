@@ -24,6 +24,7 @@ logging.basicConfig(level=logging.INFO)
 JIRA_SERVER_URL = "https://new-work.atlassian.net"
 CONFIG_FOLDER = "config"
 CUSTOMFIELD_INVESTMENT_PROFILE = "customfield_10089"
+DEFAULT_OLLAMA_MODEL = "llama3.2"
 
 # Enum for input methods
 class InputMethod(Enum):
@@ -57,7 +58,7 @@ def get_jira_credentials() -> Tuple[Optional[str], Optional[str]]:
 
     jira_email = input_with_clear("Enter your Jira email: ")
     jira_api_token = getpass.getpass("Enter your Jira API token: ")
-    return jira_email, jira_api_token
+    return jira_api_token, jira_email
 
 # Load project configuration
 def load_project_config(project_name: str) -> Dict:
@@ -190,15 +191,12 @@ def generate_description(issue_type: str, title: str) -> str:
         f"""Given the following jira issue structure for a '{issue_type}':
         ```
         {template}
-        ```
-
-        and the following title: `{title}`
-        output the same structure and prefill as many fields as possible given the title.
+        ``` and the following title: `{title}` then output the exact same text but prefill the h2. sections accordingly given the title.
         """
     )
 
     try:
-        response = ollama.chat(model="llama3.2", messages=[{"role": "user", "content": analysis_prompt}])
+        response = ollama.chat(model=get_ollama_model(), messages=[{"role": "user", "content": analysis_prompt}])
         description = response["message"]["content"].strip()
 
         return description
@@ -222,13 +220,14 @@ def create_jira_ticket(jira: JIRA, project_config: Dict, ticket: JiraTicket) -> 
         return None
 
     description = generate_description(ticket.issue_type, ticket.title)
+    logging.info(f"Generated description for ticket: {ticket.title}: '{description}'")
 
     fields = {
         "project": {"id": project_config["projectId"]},
         "summary": ticket.title,
         "issuetype": {"id": issue_type_id},
         "description": description,
-        CUSTOMFIELD_INVESTMENT_PROFILE: [{"id": investment_profile_id}]
+        CUSTOMFIELD_INVESTMENT_PROFILE: {"id": investment_profile_id}
     }
     
     if ticket.due_date:
@@ -242,6 +241,7 @@ def create_jira_ticket(jira: JIRA, project_config: Dict, ticket: JiraTicket) -> 
         fields["labels"] = ticket.labels
 
     try:
+        logging.info(f"Creating ticket: {ticket.title} with fields: {fields}")
         return jira.create_issue(fields=fields)
     except Exception as e:
         logging.error(f"Error creating ticket {ticket.title}: {e}")
@@ -279,11 +279,26 @@ def check_for_running_ollama() -> None:
         print(f"Ollama is not working: {e}")
         sys.exit(1)
 
+def get_ollama_model() -> str:
+    model_name = os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
+    try:
+      ollama.show(model_name)
+      return model_name
+    except ollama.ResponseError as e:
+      if e.status_code == 404:
+         print(f"Pulling Ollama model: {model_name}")
+         ollama.pull(model_name)
+         return model_name
+      else:
+        print(f"Error using Ollama model: {e}")
+        sys.exit(1)
+
 # Main function
 def main():
     check_for_running_ollama()
 
-    jira_email, jira_api_token = get_jira_credentials()
+    jira_api_token, jira_email = get_jira_credentials()
+    logging.info(f"Connecting to Jira with email: {jira_email} and API token: {jira_api_token}")
     jira = connect_to_jira(jira_email, jira_api_token)
 
     project_name = input("Enter the project: ")
