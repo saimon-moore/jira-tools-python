@@ -1,0 +1,43 @@
+{
+    "projectKey": "XJM",
+    "projectId": 10154,
+    "issueTypes": {
+        "Bug": 10014,
+        "Epic": 10000,
+        "Investigation": 10019,
+        "Task": 10015,
+        "Technical Debt": 10040,
+        "Training": 10038,
+        "User Story": 10004
+    },
+    "investmentProfiles": [
+        {
+            "id": "10546",
+            "value": "New or improved Functionality"
+        },
+        {
+            "id": "10547",
+            "value": "New or additional Revenue"
+        },
+        {
+            "id": "10548",
+            "value": "Tech Debt"
+        },
+        {
+            "id": "10549",
+            "value": "Operations & Sustainability"
+        },
+        {
+            "id": "10550",
+            "value": "External Request / Citizenship"
+        },
+        {
+            "id": "10551",
+            "value": "Bug or Defect"
+        },
+        {
+            "id": "10552",
+            "value": "Other"
+        }
+    ]
+}
