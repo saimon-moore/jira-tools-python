@@ -179,7 +179,33 @@ def generate_description(issue_type: str, title: str) -> str:
             Any other info
         """
     }
-    return templates.get(issue_type, "").replace("title", title)
+
+    template = templates.get(issue_type, "")
+
+    if not template:
+        raise ValueError(f"Invalid issue type: {issue_type}")
+
+    # Analysis prompt for evaluating comments
+    analysis_prompt = (
+        f"""Given the following jira issue structure for a '{issue_type}':
+        ```
+        {template}
+        ```
+
+        and the following title: `{title}`
+        output the same structure and prefill as many fields as possible given the title.
+        """
+    )
+
+    try:
+        response = ollama.chat(model="llama3.2", messages=[{"role": "user", "content": analysis_prompt}])
+        description = response["message"]["content"].strip()
+
+        return description
+
+    except Exception as e:
+        logging.error(f"Error analyzing comments: {e}")
+        return "Error during analysis.", False
 
 # Create Jira ticket
 def create_jira_ticket(jira: JIRA, project_config: Dict, ticket: JiraTicket) -> Issue:
