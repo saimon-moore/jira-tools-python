@@ -18,7 +18,8 @@ import ollama
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
+# Uncomment to enable logging
+# logging.basicConfig(level=logging.INFO)
 
 # Constants
 JIRA_SERVER_URL = "https://new-work.atlassian.net"
@@ -32,6 +33,12 @@ class InputMethod(Enum):
     ONEPASSWORD = "1"
     MANUAL = "2"
 
+@dataclass
+class IssueLink:
+    """Data structure for issue link information."""
+    link_type: str
+    issue_key: str
+
 # Data structure for Jira ticket information
 @dataclass
 class JiraTicket:
@@ -41,6 +48,7 @@ class JiraTicket:
     due_date: Optional[str] = None
     labels: Optional[List[str]] = None
     parent: Optional[str] = None
+    issue_link: Optional[IssueLink] = None
 
 def get_jira_credentials() -> Tuple[Optional[str], Optional[str]]:
     """Get Jira credentials from the user or 1Password."""
@@ -81,13 +89,19 @@ def load_tickets_from_csv(csv_path: str) -> List[JiraTicket]:
     with open(csv_path, 'r') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
+            if row.get('issueLink'):
+                issue_link = parse_issue_link(row.get('issueLink', '').strip())
+            else:
+                issue_link = None
+
             tickets.append(JiraTicket(
                 issue_type=row['issueType'].strip(),
                 title=row['title'].strip(),
                 investment_profile=row['investmentProfile'].strip(),
                 due_date=row.get('duedate').strip(),
                 labels=row.get('labels', '').strip().split(','),
-                parent=row.get('parent').strip()
+                parent=row.get('parent').strip(),
+                issue_link=issue_link
             ))
     return tickets
 
@@ -207,6 +221,31 @@ def generate_description(issue_type: str, title: str) -> str:
         logging.error(f"Error analyzing comments: {e}")
         return "Error during analysis.", False
 
+
+def parse_issue_link(link_str: str) -> Optional[IssueLink]:
+    """Parse issue link string in the format 'link_type:issue_key'."""
+    if not link_str:
+        return None
+    
+    try:
+        link_type, issue_key = link_str.strip().split(':')
+        return IssueLink(link_type=link_type, issue_key=issue_key)
+    except ValueError:
+        logging.warning(f"Invalid issue link format: {link_str}")
+        return None
+
+def create_issue_link(jira: JIRA, source_issue: Issue, link: IssueLink) -> None:
+    """Create a link between two issues."""
+    try:
+        jira.create_issue_link(
+            type=link.link_type,
+            inwardIssue=source_issue.key,
+            outwardIssue=link.issue_key
+        )
+        print(f"Created '{link.link_type}' link to {link.issue_key}")
+    except Exception as e:
+        logging.error(f"Error creating issue link: {e}")
+
 # Create Jira ticket
 def create_jira_ticket(jira: JIRA, project_config: Dict, ticket: JiraTicket) -> Issue:
     issue_type_id = project_config['issueTypes'].get(ticket.issue_type)
@@ -242,7 +281,18 @@ def create_jira_ticket(jira: JIRA, project_config: Dict, ticket: JiraTicket) -> 
         fields["parent"] = {"key": ticket.parent}
 
     try:
-        return jira.create_issue(fields=fields)
+        created_issue = jira.create_issue(fields=fields)
+
+        logging.info(f"Created ticket: {ticket.title} - {created_issue.key} (link: {ticket.issue_link})")
+        # Create issue link if specified
+        if ticket.issue_link:
+            try:
+              create_issue_link(jira, created_issue, ticket.issue_link)
+            except Exception as e:
+                logging.error(f"Error creating link to ticket {ticket.title} - {ticket.issue_link}: {e}")
+        
+        return created_issue
+
     except Exception as e:
         logging.error(f"Error creating ticket {ticket.title}: {e}")
         return None
