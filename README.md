@@ -7,6 +7,7 @@ Jirabot helps you scaffold out long lists of tickets with some AI magic to help 
 ## Setup
 1. Install [ollama](https://ollama.com/)
 2. Install the python dependencies with `pip install -r requirements.txt`
+   (alternatively you can create a virtual env (`python3 -m venv jirabot`) and active it with: `source jirabot/bin/activate`
 3. Define a Jira API key for your user [here](https://id.atlassian.com/manage-profile/security/api-tokens)
 4. Install 1password cli (optional) `brew install 1password-cli`
 5. Create a new login with username = *YOUR_EMAIL* & password = *JIRA_API_KEY*
@@ -63,7 +64,12 @@ Task,Create reusable nextjs kafka module for BCL,XJM-2939,New or improved Functi
 Investigation,[Spike] Investigate how to create OpenSearch index,XJM-2939,New or improved Functionality,,
 ```
 9. Run the script 🦙
-   It will ask you for which project do you want to create issues and then read the issues specified in the corresponding CSV files.
+
+```
+python3 jira-tool.py
+```
+
+It will ask you for which project do you want to create issues and then read the issues specified in the corresponding CSV files.
 
 __Note__: _The templates used to generate the description are hard coded. Feel free to fork and change them or enhance the code to read the templates from a project specific folder_.
 
